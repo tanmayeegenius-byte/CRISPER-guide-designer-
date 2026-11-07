@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CRISPR guide designer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{--bg:#eef5f3;--surface:#fff;--ink:#14282e;--mute:#5b7078;--line:#cfdcd9;--accent:#b0245f;--good:#1f7a5a;--mid:#b27a12;--bad:#b0372a;--pam:#b0245f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1d21;--surface:#16282d;--ink:#e3eeec;--mute:#93a9ae;--line:#2a4046;--accent:#ee6fa3;--good:#52c99d;--mid:#e0ae44;--bad:#ee7a6b;--pam:#ee6fa3}}
+:root[data-theme="dark"]{--bg:#0f1d21;--surface:#16282d;--ink:#e3eeec;--mute:#93a9ae;--line:#2a4046;--accent:#ee6fa3;--good:#52c99d;--mid:#e0ae44;--bad:#ee7a6b;--pam:#ee6fa3}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Instrument Sans",system-ui,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:28px 18px 60px}
+h1{font-size:1.9rem;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 22px;max-width:60ch}
+.mono,textarea,td.g{font-family:"JetBrains Mono",ui-monospace,monospace}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+textarea{width:100%;height:130px;resize:vertical;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);padding:10px;font-size:13px;line-height:1.5}
+.row{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end;margin-top:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.9rem;color:var(--mute)}
+select,input[type=number]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+label.chk{flex-direction:row;align-items:center;gap:6px}
+button{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 12px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:focus-visible,select:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#stat{color:var(--mute);font-size:.9rem;margin:0 0 10px}
+#map{position:relative;height:84px;margin:8px 4px 4px}
+#map .axis{position:absolute;left:0;right:0;top:40px;height:2px;background:var(--line)}
+#map .t{position:absolute;width:5px;border-radius:2px;opacity:.85;cursor:pointer;transform:translateX(-2px)}
+#map .t.f{top:12px;height:26px}#map .t.r{top:44px;height:26px}
+#map .t.sel{outline:2px solid var(--ink);opacity:1}
+#map .lbl{position:absolute;font-size:.75rem;color:var(--mute)}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--mute);cursor:pointer;user-select:none}
+tr.sel{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+tbody tr{cursor:pointer}
+.det{display:grid;gap:10px}.oli{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:.85rem}.oli code{font-family:"JetBrains Mono",monospace;overflow-x:auto;white-space:nowrap}.cols{display:flex;flex-wrap:wrap;gap:6px 24px;color:var(--mute);font-size:.9rem}h2{font-size:1.1rem;margin:0 0 8px}td.g{font-size:.84rem}.pam{color:var(--pam);font-weight:600}
+.score{font-weight:600}.hi{color:var(--good)}.md{color:var(--mid)}.lo{color:var(--bad)}
+.flags{white-space:normal;color:var(--mute);min-width:180px}
+.note{color:var(--mute);font-size:.88rem;max-width:75ch}
+.empty{padding:20px;text-align:center;color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>CRISPR guide designer</h1>
+<p class="sub">Paste a target sequence, pick a nuclease, and get ranked guides with cut sites, in-sequence off-target checks, ready-to-order cloning oligos and paired-guide deletion designs. Everything runs in your browser.</p>
+
+<section class="panel">
+<textarea id="seq" spellcheck="false" aria-label="Target DNA sequence" placeholder="Paste DNA or FASTA here (A, C, G, T)"></textarea>
+<div class="row">
+<label>Nuclease
+<select id="nuc"><option value="sp">SpCas9 (NGG, 20 nt)</option><option value="sa">SaCas9 (NNGRRT, 21 nt)</option><option value="a12">Cas12a (TTTV, 23 nt)</option></select></label>
+<label>Min GC %<input id="gcmin" type="number" min="0" max="100" value="40"></label>
+<label>Max GC %<input id="gcmax" type="number" min="0" max="100" value="70"></label>
+<label>Region start<input id="rs" type="number" min="1" placeholder="1"></label>
+<label>Region end<input id="re" type="number" min="1" placeholder="end"></label>
+<label class="chk"><input id="u6" type="checkbox" checked> Avoid TTTT (U6 promoter)</label>
+<button class="primary" id="go">Find guides</button>
+<button id="ex">Load example</button>
+</div>
+<p class="note" style="margin:10px 0 0">Region limits guides to those that overlap that stretch, such as one exon or the first 100 bp after the start codon.</p>
+</section>
+
+<section class="panel">
+<p id="stat">Paste a sequence and select Find guides.</p>
+<div id="map" aria-label="Guide positions along the sequence"></div>
+<p class="note" id="legend"></p>
+</section>
+
+<section class="panel">
+<div class="wrap">
+<table>
+<thead><tr><th data-k="idx">#</th><th data-k="strand">Strand</th><th data-k="start">Position</th><th data-k="cut">Cut after</th><th>Guide + PAM (5’→3’)</th><th data-k="gc">GC %</th><th data-k="off">Near matches</th><th data-k="score">Score</th><th>Notes</th></tr></thead>
+<tbody id="rows"><tr><td colspan="9" class="empty">No guides yet.</td></tr></tbody>
+</table>
+</div>
+<div class="row"><button id="csv" disabled>Copy all as CSV</button></div>
+</section>
+
+<section class="panel" id="detail"><h2>Selected guide</h2><p class="note">Select a row or a bar on the map to see cloning oligos and details.</p></section>
+
+<section class="panel" id="pairs"><h2>Paired guides for a deletion</h2><p class="note">Two guides cutting on either side of a region remove the segment between them. Run a search to see pairs.</p></section>
+
+<p class="note">Scores are a rule-based heuristic (GC content, homopolymers, Pol III terminators, hairpins, the base next to the PAM, and duplicate sites). Near matches count other sites inside your pasted sequence that differ by up to 3 mismatches; this does not search a genome. Check your shortlist in CRISPOR or CHOPCHOP against your organism’s genome before ordering oligos.</p>
+</main>
+
+<script>
+const EX="ATGGCTAGCAAAGGAGAAGAACTTTTCACTGGAGTTGTCCCAATTCTTGTTGAATTAGATGGTGATGTTAATGGGCACAAATTTTCTGTCAGTGGAGAGGGTGAAGGTGATGCAACATACGGAAAACTTACCCTTAAATTTATTTGCACTACTGGAAAACTACCTGTTCCATGGCCAACACTTGTCACTACTTTCTCTTATGGTGTTCAATGCTTTTCAAGATACCCAGATCATATGAAACGGCATGACTTTTTCAAGAGTGCCATGCCCGAAGGTTATGTACAGGAAAGAACTATATTTTTCAAAGATGACGGGAACTACAAGACACGTGCTGAAGTCAAGTTTGAAGGTGATACCCTTGTTAATAGAATCGAGTTAAAAGGTATTGATTTTAAAGAAGATGGAAACATTCTTGGACACAAATTGGAATACAACTATAACTCACACAATGTATACATCATGGCAGACAAACAAAAGAATGGAATCAAAGTTAACTTCAAAATTAGACACAACATTGAAGATGGAAGCGTTCAACTAGCAGACCATTATCAACAAAATACTCCAATTGGCGATGGCCCTGTCCTTTTACCAGACAACCATTACCTGTCCACACAATCTGCCCTTTCGAAAGATCCCAACGAAAAGAGAGACCACATGGTCCTTCTTGAGTTTGTAACAGCTGCTGGGATTACACATGGCATGGATGAACTATACAAATAA";
+const NUC={sp:{pam:"NGG",len:20,side:3},sa:{pam:"NNGRRT",len:21,side:3},a12:{pam:"TTTV",len:23,side:5}};
+const IU={A:"A",C:"C",G:"G",T:"T",N:"ACGT",R:"AG",V:"ACG"};
+const $=id=>document.getElementById(id);
+let hits=[],sortK="score",sortDir=-1,sel=null,seqLen=0,nucKey="sp";
+const clean=t=>t.split("\n").filter(l=>!l.startsWith(">")).join("").toUpperCase().replace(/U/g,"T").replace(/[^ACGT]/g,"");
+const rc=s=>{const m={A:"T",C:"G",G:"C",T:"A"};return s.split("").reverse().map(c=>m[c]).join("")};
+const pamOk=(p,pat)=>{for(let i=0;i<pat.length;i++)if(!IU[pat[i]].includes(p[i]))return false;return true};
+const gcPct=s=>Math.round(100*(s.match(/[GC]/g)||[]).length/s.length);
+const mm=(a,b)=>{let d=0;for(let i=0;i<a.length;i++)if(a[i]!==b[i])d++;return d};
+function hairpin(g){for(let i=0;i+4<=g.length;i++){const k=rc(g.slice(i,i+4)),j=g.indexOf(k,i+7);if(j>-1)return true}return false}
+
+function scan(){
+  const seq=clean($("seq").value),n=seq.length;nucKey=$("nuc").value;const cfg=NUC[nucKey];
+  const gmin=+$("gcmin").value,gmax=+$("gcmax").value,u6=$("u6").checked;
+  const rs=+$("rs").value||1,re=+$("re").value||n;
+  seqLen=n;hits=[];sel=null;
+  if(n<cfg.len+cfg.pam.length){stat("Sequence is too short. Paste at least "+(cfg.len+cfg.pam.length)+" bases.");return}
+  const all=[];
+  [["+",seq],["−",rc(seq)]].forEach(([strand,s])=>{
+    const pl=cfg.pam.length;
+    for(let i=0;i<=n-pl;i++){
+      let gs,ge;
+      if(cfg.side===3){gs=i-cfg.len;ge=i;if(gs<0)continue}else{gs=i+pl;ge=gs+cfg.len;if(ge>n)continue}
+      if(!pamOk(s.slice(i,i+pl),cfg.pam))continue;
+      const lo=strand==="+"?gs+1:n-ge+1,hi=strand==="+"?ge:n-gs;
+      const k=cfg.side===3?ge-3:gs+18, cut=strand==="+"?k:n-k;
+      all.push({strand,start:lo,end:hi,g:s.slice(gs,ge),pam:s.slice(i,i+pl),side:cfg.side,cut});
+    }
+  });
+  const doOff=all.length<=2500;
+  all.forEach(h=>{
+    if(h.end<rs||h.start>re)return;
+    const gc=gcPct(h.g),flags=[];let sc=100,off=null,minmm=null;
+    if(gc<30||gc>80){sc-=30;flags.push("GC far from range")}else if(gc<gmin||gc>gmax){sc-=12;flags.push("GC outside "+gmin+"–"+gmax)}
+    if(/TTTT/.test(h.g)){sc-=u6?35:5;flags.push("TTTT run"+(u6?" (stops U6)":""))}
+    if(/(A{5}|C{5}|G{5})/.test(h.g)){sc-=10;flags.push("homopolymer ≥5")}
+    if(/GGGG/.test(h.g)){sc-=8;flags.push("GGGG")}
+    if(hairpin(h.g)){sc-=6;flags.push("possible hairpin")}
+    if(h.side===3){const b=h.g[h.g.length-1];if(b==="G")sc+=4;else if(b==="C"){sc-=5;flags.push("C next to PAM")}}
+    if(h.g[0]!=="G")flags.push("no 5’ G (oligo adds one)");
+    if(doOff){off=0;minmm=9;all.forEach(o=>{if(o===h||(o.strand!==h.strand&&o.start===h.start&&o.end===h.end))return;const d=mm(h.g,o.g);if(d<=3){off++;minmm=Math.min(minmm,d)}});
+      if(off){if(minmm===0){sc-=40;flags.push("duplicate site in sequence")}else{sc-=Math.min(25,off*8);flags.push(off+" near match"+(off>1?"es":"")+" ("+minmm+" mismatch"+(minmm>1?"es":"")+")")}}}
+    hits.push({...h,gc,flags,score:Math.max(0,sc),off:off===null?-1:off});
+  });
+  hits.forEach((h,i)=>h.idx=i+1);
+  render();pairs();detail();
+}
+function stat(t){$("stat").textContent=t;$("map").innerHTML="";$("rows").innerHTML='<tr><td colspan="9" class="empty">No guides.</td></tr>';$("csv").disabled=true}
+
+function render(){
+  const good=hits.filter(h=>h.score>=80).length;
+  $("stat").textContent=seqLen+" bases scanned · "+hits.length+" candidate guides · "+good+" scoring 80 or higher";
+  drawMap();
+  const tb=$("rows");
+  const o=[...hits].sort((a,b)=>{const x=a[sortK],y=b[sortK];return (x>y?1:x<y?-1:0)*sortDir||a.idx-b.idx});
+  if(!o.length){tb.innerHTML='<tr><td colspan="9" class="empty">No guides found. Try another nuclease or widen the region.</td></tr>';$("csv").disabled=true;return}
+  $("csv").disabled=false;
+  tb.innerHTML=o.map(h=>{
+    const sq=h.side===3?h.g+'<span class="pam">'+h.pam+'</span>':'<span class="pam">'+h.pam+'</span>'+h.g;
+    const cls=h.score>=80?"hi":h.score>=60?"md":"lo";
+    return `<tr data-i="${h.idx}" class="${sel===h.idx?"sel":""}"><td>${h.idx}</td><td>${h.strand}</td><td>${h.start}–${h.end}</td><td>${h.cut}</td><td class="g">${sq}</td><td>${h.gc}</td><td>${h.off<0?"n/a":h.off}</td><td class="score ${cls}">${h.score}</td><td class="flags">${h.flags.join("; ")||"none"}</td></tr>`}).join("");
+}
+function drawMap(){
+  let h='<div class="axis"></div>';
+  hits.forEach(x=>{const col=x.score>=80?"var(--good)":x.score>=60?"var(--mid)":"var(--bad)";
+    h+=`<div class="t ${x.strand==="+"?"f":"r"} ${sel===x.idx?"sel":""}" data-i="${x.idx}" style="left:${(x.start-1)/seqLen*100}%;background:${col}" title="#${x.idx} · score ${x.score}"></div>`});
+  h+='<span class="lbl" style="left:0;top:0">+ strand</span><span class="lbl" style="left:0;bottom:0">− strand</span><span class="lbl" style="right:0;top:0">'+seqLen+' bp</span>';
+  $("map").innerHTML=h;
+  $("legend").textContent="Green bars score 80 or higher, amber 60–79, red below 60. Select a bar or a row to link them.";
+}
+function oligos(h){
+  if(h.side!==3)return null;
+  const g=h.g,top=(g[0]==="G"?"CACC":"CACCG")+g,bot="AAAC"+rc(g)+(g[0]==="G"?"":"C");
+  return {top,bot};
+}
+function detail(){
+  const d=$("detail"),h=hits.find(x=>x.idx===sel);
+  if(!h){d.innerHTML='<h2>Selected guide</h2><p class="note">Select a row or a bar on the map to see cloning oligos and details.</p>';return}
+  const o=oligos(h);
+  d.innerHTML=`<h2>Guide #${h.idx}</h2><div class="det"><div class="cols"><span>Strand ${h.strand}</span><span>Positions ${h.start}–${h.end}</span><span>Cut after base ${h.cut}${nucKey==="a12"?" (non-target strand; staggered)":""}</span><span>GC ${h.gc}%</span><span>Score ${h.score}</span></div>
+  <div class="oli"><span>Guide</span><code>${h.g}</code><button data-copy="${h.g}">Copy</button></div>
+  ${o?`<div class="oli"><span>Top oligo</span><code>${o.top}</code><button data-copy="${o.top}">Copy</button></div><div class="oli"><span>Bottom oligo</span><code>${o.bot}</code><button data-copy="${o.bot}">Copy</button></div><p class="note">Anneal the pair, then ligate into a U6 guide vector cut with BbsI (such as pX330) or BsmBI (such as lentiGuide). The oligos carry CACC and AAAC overhangs and add a 5’ G when the guide doesn’t start with one. Confirm the overhangs against your vector’s documentation.</p>`:`<p class="note">Oligo design is offered for SpCas9 and SaCas9 U6 vectors. Cas12a crRNA cloning depends on the vector, so check its documentation.</p>`}</div>`;
+}
+function pairs(){
+  const p=$("pairs");
+  const pool=hits.filter(h=>h.score>=70),res=[];
+  for(let i=0;i<pool.length;i++)for(let j=i+1;j<pool.length;j++){
+    const a=pool[i],b=pool[j],dist=Math.abs(a.cut-b.cut);
+    if(dist>=20&&dist<=1000)res.push({a,b,dist,s:Math.min(a.score,b.score)});
+  }
+  res.sort((x,y)=>y.s-x.s||x.dist-y.dist);
+  if(!res.length){p.innerHTML='<h2>Paired guides for a deletion</h2><p class="note">No pairs of guides scoring 70 or higher cut 20–1000 bp apart in this sequence.</p>';return}
+  p.innerHTML='<h2>Paired guides for a deletion</h2><p class="note">Top pairs by lower score, using guides scoring 70 or higher that cut 20–1000 bp apart. Deleted size is approximate.</p><div class="wrap"><table><thead><tr><th>Guide A</th><th>Guide B</th><th>Cut sites</th><th>Deletion</th><th>Lower score</th></tr></thead><tbody>'+
+   res.slice(0,8).map(r=>`<tr><td class="g">#${r.a.idx} ${r.a.g}</td><td class="g">#${r.b.idx} ${r.b.g}</td><td>${Math.min(r.a.cut,r.b.cut)} and ${Math.max(r.a.cut,r.b.cut)}</td><td>~${r.dist} bp</td><td>${r.s}</td></tr>`).join("")+'</tbody></table></div>';
+}
+function pick(i){sel=+i;render();detail();document.querySelector(`tr[data-i="${i}"]`)?.scrollIntoView({block:"nearest"})}
+const copy=(txt,b,lab)=>navigator.clipboard?.writeText(txt).then(()=>{b.textContent="Copied";setTimeout(()=>b.textContent=lab,1200)}).catch(()=>{});
+$("go").onclick=scan;
+$("ex").onclick=()=>{$("seq").value=EX;scan()};
+$("map").onclick=e=>{const t=e.target.closest(".t");if(t)pick(t.dataset.i)};
+$("rows").onclick=e=>{const r=e.target.closest("tr[data-i]");if(r)pick(r.dataset.i)};
+$("detail").onclick=e=>{const b=e.target.closest("button[data-copy]");if(b)copy(b.dataset.copy,b,"Copy")};
+document.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortDir=sortK===k?-sortDir:(k==="score"||k==="gc"?-1:1);sortK=k;render()});
+$("csv").onclick=()=>{
+  const rows=[["id","strand","start","end","cut_after","guide","pam","gc_percent","near_matches","score","notes"],...hits.map(h=>[h.idx,h.strand,h.start,h.end,h.cut,h.g,h.pam,h.gc,h.off,h.score,h.flags.join("; ")])];
+  copy(rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\n"),$("csv"),"Copy all as CSV")};
+</script>
+</body>
+</html>
